@@ -1,11 +1,14 @@
-#include <Wire.h>
+ #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL345_U.h>
 
 float t_new, t_old = 0.0f, v_new, v_old = 0.0f, x_new, x_old = 0.0f, delta_t;
 float a_off;
-float a_fix;
-
+float max_static_Acc ,min_static_Acc ;
+float Distance;
+float a_fix,a_array[10];
+int i = 0;
+char dbgmsg[200];
 /* Assign a unique ID to this sensor at the same time */
 Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
@@ -113,12 +116,9 @@ void displayRange(void)
 
 void setup(void) 
 {
-#ifndef ESP8266
-  while (!Serial); // for Leonardo/Micro/Zero
-#endif
   Serial.begin(9600);
   Serial.println("Accelerometer Test"); Serial.println("");
-  
+  //Serial.println(F_CPU);
   /* Initialise the sensor */
   if(!accel.begin())
   {
@@ -128,17 +128,17 @@ void setup(void)
   }
 
   /* Set the range to whatever is appropriate for your project */
-  // accel.setRange(ADXL345_RANGE_16_G);
-  // accel.setRange(ADXL345_RANGE_8_G);
+   caccel.setRange(ADXL345_RANGE_16_G);
+   //accel.setRange(ADXL345_RANGE_8_G);
   // accel.setRange(ADXL345_RANGE_4_G);
-  accel.setRange(ADXL345_RANGE_2_G);
+  //accel.setRange(ADXL345_RANGE_2_G);
   
   /* Display some basic information on this sensor */
-  displaySensorDetails();
+  //displaySensorDetails();
   
   /* Display additional settings (outside the scope of sensor_t) */
-  displayDataRate();
-  displayRange();
+  //displayDataRate();
+  //displayRange();
   Serial.println("");
 
   Serial.println("Please hold the accelerometer still for a couple seconds!");
@@ -147,6 +147,11 @@ void setup(void)
   sensors_event_t event; 
   accel.getEvent(&event);
   a_off = event.acceleration.x;
+
+  pinMode(3,OUTPUT);
+  digitalWrite(3,LOW);
+  pinMode(2,INPUT);
+  digitalWrite(2,HIGH);
 }
 
 void loop(void) 
@@ -156,26 +161,73 @@ void loop(void)
   sensors_event_t event; 
   accel.getEvent(&event);
 
-  t_new = micros()*1e-6;
+  t_new = micros()*1e-3;
   delta_t = t_new-t_old;
 
   a_fix = event.acceleration.x-a_off; // Corrected acceleration
 
-  a_fix = (a_fix > 0.08f) ? a_fix : 0.0f;
+  a_fix = (a_fix > 0.35) ? a_fix : 0.0f;
+ /* for(i=0;i<10;i++)
+  {
+    sensors_event_t event; 
+    accel.getEvent(&event);
+    a_fix = event.acceleration.x-a_off; // Corrected acceleration
+    a_array[i]=a_fix;
+  }
+  a_fix = 0;
+  for(i=0;i<10;i++)
+  {
+   a_fix += a_array[i];
+  }
+  a_fix /= 10;
+  a_fix = (a_fix > 0.25) ? a_fix : 0.0f;
+  */
+  v_new = delta_t*a_fix;
 
-  v_new = v_old + delta_t*a_fix;
+  if(digitalRead(2)==0)
+  {
+    x_new = x_old + delta_t*v_new;
+  }
+  
+  if(max_static_Acc<a_fix)
+  {
+    max_static_Acc=a_fix;
+  }
+    if(min_static_Acc>a_fix)
+  {
+    min_static_Acc=a_fix;
+  }
+  
+  Distance = map(x_new,0,45000,0,22);
+  //if(digitalRead(2)==1)
+  //{
+    //Serial.print("SW: ");Serial.print(digitalRead(2));
+    //Serial.print(" T: "); Serial.print(delta_t);// Serial.print(" s, ");
+    Serial.print(" X: "); Serial.print(x_new); //Serial.print(" m, ");
+    Serial.print(" D: "); Serial.print(Distance); //Serial.print(" m, ");
 
-  x_new = x_old + delta_t*v_new;
+    //Serial.print(" V: "); Serial.print(v_new); //Serial.print(" m/s, ");
+    Serial.print(" A: "); Serial.print(a_fix); //Serial.print(" m/s^2, ");
+    //Serial.print(" MaxA: "); Serial.print(max_static_Acc); //Serial.print(" m/s^2, ");
+    //Serial.print(" MinA: "); Serial.print(min_static_Acc); //Serial.println(" m/s^2, ");  
+    //Serial.print("Y: "); Serial.print(event.acceleration.y); Serial.print("  ");
+    //Serial.print("Z: "); Serial.print(event.acceleration.z); Serial.print("  ");Serial.println("m/s^2 ");
+    //delay(500);
 
-  Serial.print("Delta X: "); Serial.print(x_new); Serial.print(" m, ");
-  Serial.print("V: "); Serial.print(v_new); Serial.print(" m/s, ");
-  Serial.print("A: "); Serial.print(a_fix); Serial.println(" m/s^2, ");
-  //Serial.print("Y: "); Serial.print(event.acceleration.y); Serial.print("  ");
-  //Serial.print("Z: "); Serial.print(event.acceleration.z); Serial.print("  ");Serial.println("m/s^2 ");
-  //delay(500);
+    Serial.println("");
+  //}
 
+  
+  if(Serial.available())
+   {
+    if(Serial.read()=='c')
+      {
+      x_new = 0;
+      }
+    }
   t_old = t_new;
   x_old = x_new;
   v_old = v_new;
+
   
 }
